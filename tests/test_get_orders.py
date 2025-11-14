@@ -1,4 +1,4 @@
-import pytest
+
 import allure
 
 from Task_2.data import (
@@ -6,7 +6,7 @@ from Task_2.data import (
     STATUS_UNAUTHORIZED,
     UNAUTHORIZED_MESSAGE,
 )
-from Task_2.urls import get_ingredients, create_order, get_orders
+from Task_2.api_client import StellarBurgersAPIClient
 
 
 @allure.epic("Stellar Burgers API")
@@ -18,24 +18,23 @@ class TestGetOrders:
     def test_get_orders_with_authorization(self, authenticated_user):
         # Получаем свежий токен из фикстуры
         token = authenticated_user["token"]
+        client = StellarBurgersAPIClient()
         
         # Получаем список ингредиентов
         with allure.step("Получаем список ингредиентов"):
-            ingredients_response = get_ingredients(token)
+            ingredients_response = client.get_ingredients(token=token)
             ingredients_body = ingredients_response.json()
             
             # Берем первые два ингредиента для создания заказа
             ingredient_ids = [ingredients_body["data"][0]["_id"], ingredients_body["data"][1]["_id"]]
         
         # Создаем заказ, чтобы у пользователя были заказы
-        order_payload = {"ingredients": ingredient_ids}
-        
         with allure.step("Создаем заказ для пользователя"):
-            create_order(token, order_payload)
+            client.create_order(ingredient_ids, token=token)
         
         # Получаем заказы пользователя
         with allure.step("Получаем заказы пользователя"):
-            response = get_orders(token)
+            response = client.get_orders(token=token)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -44,24 +43,26 @@ class TestGetOrders:
             assert body.get("success") is True
             assert "orders" in body
             assert isinstance(body["orders"], list)
+            assert len(body["orders"]) > 0
             assert "total" in body
             assert "totalToday" in body
-            # Проверяем структуру заказа, если есть заказы
-            if body["orders"]:
-                order = body["orders"][0]
-                assert "_id" in order
-                assert "ingredients" in order
-                assert "status" in order
-                assert "name" in order
-                assert "createdAt" in order
-                assert "updatedAt" in order
-                assert "number" in order
+            
+            order = body["orders"][0]
+            assert "_id" in order
+            assert "ingredients" in order
+            assert "status" in order
+            assert "name" in order
+            assert "createdAt" in order
+            assert "updatedAt" in order
+            assert "number" in order
 
     @allure.story("Получение заказов")
     @allure.title("Получение заказов неавторизованного пользователя")
     def test_get_orders_without_authorization(self):
+        client = StellarBurgersAPIClient()
+        
         with allure.step("Пытаемся получить заказы без авторизации"):
-            response = get_orders(None)
+            response = client.get_orders(token=None)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         

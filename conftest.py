@@ -1,6 +1,6 @@
 import pytest
 from .helpers import generate_user_data
-from .urls import register_user, login_user, delete_user
+from .api_client import StellarBurgersAPIClient
 
 
 #Фикстура для очистки созданных пользователей после тестов
@@ -14,10 +14,11 @@ def user_cleanup():
             created_tokens.append(token)
         else:
             # Пытаемся залогиниться, чтобы получить токен для удаления
-            login_response = login_user({
-                "email": user_data["email"],
-                "password": user_data["password"],
-            })
+            client = StellarBurgersAPIClient()
+            login_response = client.login_user(
+                user_data["email"],
+                user_data["password"]
+            )
             if login_response.status_code == 200:
                 body = login_response.json()
                 token = body.get("accessToken")
@@ -27,8 +28,9 @@ def user_cleanup():
     yield add_user_for_cleanup
     
     # Удаляем созданных пользователей
+    client = StellarBurgersAPIClient()
     for token in created_tokens:
-        delete_user(token)
+        client.delete_user(token=token)
 
 
 #Фикстура для генерации данных пользователя
@@ -41,9 +43,14 @@ def user_data():
 @pytest.fixture(scope="function")
 def authenticated_user(user_cleanup):
     user_data = generate_user_data()
+    client = StellarBurgersAPIClient()
     
     # Регистрируем пользователя
-    register_response = register_user(user_data)
+    register_response = client.register_user(
+        user_data["email"],
+        user_data["password"],
+        user_data["name"]
+    )
     
     register_body = register_response.json()
     token = register_body.get("accessToken")
@@ -53,7 +60,7 @@ def authenticated_user(user_cleanup):
     user_cleanup(user_data, token=token)
     
     # Возвращаем данные пользователя
-    yield {
+    return {
         "token": token,
         "refresh_token": refresh_token,
         "user_data": user_data,

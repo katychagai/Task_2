@@ -1,6 +1,5 @@
 
 import allure
-
 from Task_2.data import (
     STATUS_CREATED,
     STATUS_UNAUTHORIZED,
@@ -10,7 +9,7 @@ from Task_2.data import (
     INGREDIENT_IDS_MUST_BE_PROVIDED_MESSAGE,
     TEST_INGREDIENT_IDS,
 )
-from Task_2.urls import get_ingredients, create_order
+from Task_2.api_client import StellarBurgersAPIClient
 
 
 @allure.epic("Stellar Burgers API")
@@ -22,20 +21,19 @@ class TestCreateOrder:
     def test_create_order_with_authorization_and_ingredients(self, authenticated_user):
         # Получаем свежий токен из фикстуры
         token = authenticated_user["token"]
+        client = StellarBurgersAPIClient()
         
         # Получаем список ингредиентов
         with allure.step("Получаем список ингредиентов"):
-            ingredients_response = get_ingredients(token)
+            ingredients_response = client.get_ingredients(token=token)
             ingredients_body = ingredients_response.json()
             
             # Берем первые два ингредиента
             ingredient_ids = [ingredients_body["data"][0]["_id"], ingredients_body["data"][1]["_id"]]
         
         # Создаем заказ
-        order_payload = {"ingredients": ingredient_ids}
-        
         with allure.step("Создаем заказ с ингредиентами"):
-            response = create_order(token, order_payload)
+            response = client.create_order(ingredient_ids, token=token)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -51,12 +49,11 @@ class TestCreateOrder:
     def test_create_order_with_authorization_without_ingredients(self, authenticated_user):
         # Получаем свежий токен из фикстуры
         token = authenticated_user["token"]
+        client = StellarBurgersAPIClient()
         
         # Создаем заказ без ингредиентов
-        order_payload = {"ingredients": []}
-        
         with allure.step("Создаем заказ без ингредиентов"):
-            response = create_order(token, order_payload)
+            response = client.create_order([], token=token)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -68,11 +65,11 @@ class TestCreateOrder:
     @allure.story("Создание заказа")
     @allure.title("Создание заказа без авторизации. тест ожидает 401. API позволяет создавать заказы без авторизации, поэтому тест падает")
     def test_create_order_without_authorization(self):
-        # Создаем заказ без авторизации
-        order_payload = {"ingredients": TEST_INGREDIENT_IDS}
+        client = StellarBurgersAPIClient()
         
+        # Создаем заказ без авторизации
         with allure.step("Создаем заказ без авторизации"):
-            response = create_order(None, order_payload)
+            response = client.create_order(TEST_INGREDIENT_IDS, token=None)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -87,12 +84,14 @@ class TestCreateOrder:
     def test_create_order_with_invalid_ingredients(self, authenticated_user):
         # Получаем свежий токен из фикстуры
         token = authenticated_user["token"]
+        client = StellarBurgersAPIClient()
         
         # Создаем заказ с неверным хешем ингредиентов
-        order_payload = {"ingredients": ["invalid_hash_123", "invalid_hash_456"]}
-        
         with allure.step("Создаем заказ с неверным хешем ингредиентов"):
-            response = create_order(token, order_payload)
+            response = client.create_order(
+                ["invalid_hash_123", "invalid_hash_456"],
+                token=token
+            )
         
         with allure.step("Проверяем код ответа 500 Internal Server Error"):
             assert response.status_code == STATUS_INTERNAL_SERVER_ERROR

@@ -1,7 +1,7 @@
 import pytest
 import allure
 
-from Task_2.helpers import generate_user_data
+from Task_2.helpers import generate_user_data, prepare_login_data
 from Task_2.data import (
     STATUS_CREATED,
     STATUS_UNAUTHORIZED,
@@ -9,7 +9,7 @@ from Task_2.data import (
     INCORRECT_CREDENTIALS,
     INCORRECT_LOGIN_FIELDS,
 )
-from Task_2.urls import register_user, login_user
+from Task_2.api_client import StellarBurgersAPIClient
 
 
 #Тесты для логина пользователя
@@ -23,20 +23,23 @@ class TestUserLogin:
     def test_login_existing_user(self, user_cleanup):
         # Создаем пользователя
         user_data = generate_user_data()
+        client = StellarBurgersAPIClient()
         
         with allure.step("Создаем пользователя"):
-            register_response = register_user(user_data)
+            register_response = client.register_user(
+                user_data["email"],
+                user_data["password"],
+                user_data["name"]
+            )
             register_body = register_response.json()
             register_token = register_body.get("accessToken")
         
         # Логинимся под пользователем
-        login_payload = {
-            "email": user_data["email"],
-            "password": user_data["password"],
-        }
-        
         with allure.step("Отправляем запрос на логин"):
-            response = login_user(login_payload)
+            response = client.login_user(
+                user_data["email"],
+                user_data["password"]
+            )
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -57,12 +60,13 @@ class TestUserLogin:
     @pytest.mark.parametrize("incorrect_credentials", INCORRECT_CREDENTIALS)
     def test_login_with_incorrect_credentials(self, incorrect_credentials):
         allure.dynamic.title(f"Логин с {incorrect_credentials['description']}")
+        client = StellarBurgersAPIClient()
         
         with allure.step(f"Отправляем запрос с {incorrect_credentials['description']}"):
-            response = login_user({
-                "email": incorrect_credentials["email"],
-                "password": incorrect_credentials["password"],
-            })
+            response = client.login_user(
+                incorrect_credentials["email"],
+                incorrect_credentials["password"]
+            )
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         
@@ -79,19 +83,20 @@ class TestUserLogin:
         
         # Создаем пользователя
         user_data = generate_user_data()
+        client = StellarBurgersAPIClient()
         
         with allure.step("Создаем пользователя"):
-            register_user(user_data)
+            client.register_user(
+                user_data["email"],
+                user_data["password"],
+                user_data["name"]
+            )
         
         # Формируем данные для логина с неверным полем
-        login_payload = {
-            "email": user_data["email"],
-            "password": user_data["password"],
-        }
-        login_payload[incorrect_field["field"]] = incorrect_field["incorrect_value"]
+        email, password = prepare_login_data(user_data, incorrect_field)
         
         with allure.step(f"Пытаемся залогиниться с {incorrect_field['description']}"):
-            response = login_user(login_payload)
+            response = client.login_user(email, password)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         

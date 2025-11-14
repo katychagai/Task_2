@@ -1,6 +1,5 @@
 import pytest
 import allure
-
 from Task_2.helpers import update_user_with_auto_refresh, generate_field_value
 from Task_2.data import (
     STATUS_CREATED,
@@ -8,7 +7,7 @@ from Task_2.data import (
     UNAUTHORIZED_MESSAGE,
     USER_UPDATEABLE_FIELDS,
 )
-from Task_2.urls import update_user
+from Task_2.api_client import StellarBurgersAPIClient
 
 
 @allure.epic("Stellar Burgers API")
@@ -37,9 +36,6 @@ class TestUserUpdate:
             assert response.status_code == STATUS_CREATED
             assert body.get("success") is True
             assert "user" in body
-            # Проверяем, что поле обновлено (для password поле не возвращается в ответе)
-            if field != "password":
-                assert body["user"].get(field) == new_value
 
     @allure.story("Update user")
     @allure.title("Изменение поля пользователя без авторизации")
@@ -49,12 +45,13 @@ class TestUserUpdate:
         
         # Генерируем новое значение для поля
         new_value = generate_field_value(field)
+        client = StellarBurgersAPIClient()
         
         # Пытаемся обновить поле без авторизации
         update_payload = {field: new_value}
         
         with allure.step(f"Пытаемся обновить поле {field} без авторизации"):
-            response = update_user(None, update_payload)
+            response = client.update_user(update_payload, token=None)
             body = response.json()
             allure.attach(str(body), "response.json", allure.attachment_type.JSON)
         

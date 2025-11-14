@@ -1,6 +1,6 @@
 import time
 from faker import Faker
-from .urls import update_user, login_user, refresh_token
+from .api_client import StellarBurgersAPIClient
 from .data import STATUS_CREATED, STATUS_UNAUTHORIZED
 
 fake = Faker()
@@ -29,14 +29,31 @@ def generate_field_value(field):
     }
     return generators[field]()
 
+#Формирует данные для регистрации с пустым значением для указанного поля
+def prepare_register_data_without_field(user_data, missing_field):
+    fields_map = {
+        "email": ("", user_data["password"], user_data["name"]),
+        "password": (user_data["email"], "", user_data["name"]),
+        "name": (user_data["email"], user_data["password"], ""),
+    }
+    return fields_map[missing_field]
+
+#Формирует данные для логина с подстановкой неверного значения для указанного поля
+def prepare_login_data(user_data, incorrect_field):
+    fields_map = {
+        "email": (incorrect_field["incorrect_value"], user_data["password"]),
+        "password": (user_data["email"], incorrect_field["incorrect_value"]),
+    }
+    return fields_map[incorrect_field["field"]]
+
 #Обновляет данные пользователя с автоматическим обновлением токена при необходимости
 def update_user_with_auto_refresh(authenticated_user, payload):
-    
+    client = StellarBurgersAPIClient()
     token = authenticated_user["token"]
     user_data = authenticated_user["user_data"]
     
     # Делаем запрос на обновление
-    response = update_user(token, payload)
+    response = client.update_user(payload, token=token)
     
     # Если токен истек (401), обновляем его
     if response.status_code == STATUS_UNAUTHORIZED:
@@ -44,27 +61,27 @@ def update_user_with_auto_refresh(authenticated_user, payload):
         
         # Пробуем обновить через refresh_token
         if refresh_token_value:
-            refresh_response = refresh_token(refresh_token_value)
+            refresh_response = client.refresh_token(refresh_token_value)
             if refresh_response.status_code == STATUS_CREATED:
                 refresh_body = refresh_response.json()
                 token = refresh_body.get("accessToken")
                 authenticated_user["token"] = token
                 authenticated_user["refresh_token"] = refresh_body.get("refreshToken")
                 # Повторяем запрос с новым токеном
-                response = update_user(token, payload)
+                response = client.update_user(payload, token=token)
         
         # Если refresh_token не сработал или все еще 401, перелогиниваемся
         if response.status_code == STATUS_UNAUTHORIZED:
-            login_response = login_user({
-                "email": user_data["email"],
-                "password": user_data["password"]
-            })
+            login_response = client.login_user(
+                user_data["email"],
+                user_data["password"]
+            )
             if login_response.status_code == STATUS_CREATED:
                 login_body = login_response.json()
                 token = login_body.get("accessToken")
                 authenticated_user["token"] = token
                 authenticated_user["refresh_token"] = login_body.get("refreshToken")
                 # Повторяем запрос с новым токеном
-                response = update_user(token, payload)
+                response = client.update_user(payload, token=token)
     
     return response

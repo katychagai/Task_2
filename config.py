@@ -12,3 +12,6 @@ def get_settings():
         base_url=os.getenv("BASE_URL", "https://stellarburgers.education-services.ru"),
     )
 
+
+
+
